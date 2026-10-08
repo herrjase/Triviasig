@@ -1,0 +1,188 @@
+* {
+box-sizing: border-box;
+}
+body {
+margin: 0;
+background: #080808;
+color: #eeeeee;
+font-family: Arial, sans-serif;
+overflow: hidden;
+}
+.app {
+width: 100vw;
+height: 100vh;
+}
+/* Верхняя панель */
+.topbar {
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 60px;
+display: flex;
+align-items: center;
+padding: 0 20px;
+background: #111111;
+border-bottom: 1px solid #292929;
+z-index: 10;
+}
+.logo {
+font-size: 22px;
+font-weight: bold;
+}
+.logo span {
+margin-left: 6px;
+}
+.turn-info {
+margin-left: auto;
+margin-right: 25px;
+color: #aaaaaa;
+}
+.turn-info b {
+color: white;
+}
+.login-button {
+border: none;
+border-radius: 8px;
+padding: 10px 16px;
+background: #5865f2; color: white;
+font-weight: bold;
+cursor: pointer;
+}
+/* Боковое меню */
+.sidebar {
+position: fixed;
+top: 60px;
+left: 0;
+bottom: 0;
+width: 220px;
+padding: 15px 10px;
+background: #101010;
+border-right: 1px solid #292929;
+z-index: 5;
+}
+.menu-item {
+width: 100%;
+display: flex;
+align-items: center;
+gap: 12px;
+margin-bottom: 5px;
+padding: 12px;
+border: none;
+border-radius: 8px;
+background: transparent;
+color: #aaaaaa;
+text-align: left;
+font-size: 15px;
+cursor: pointer;
+}
+.menu-item:hover {
+background: #1d1d1d;
+color: white;
+}
+.menu-item.active {
+background: #252525;
+color: white;
+}
+.sidebar-bottom {
+position: absolute;
+left: 10px;
+right: 10px; bottom: 15px;
+}
+/* Основная область */
+.main {
+position: fixed;
+top: 60px;
+left: 220px;
+right: 0;
+bottom: 0;
+background: #151515;
+}
+/* Карта */
+.map {
+position: absolute;
+inset: 0;
+background:
+radial-gradient(circle at 50% 45%, #252525 0%, #171717 45%, #0d0d0d 100%);
+overflow: hidden;
+}
+.map-title {
+position: absolute;
+top: 20px;
+left: 20px;
+padding: 10px 15px;
+background: rgba(10, 10, 10, 0.8);
+border: 1px solid #333;
+border-radius: 8px;
+z-index: 2;
+}
+.map-placeholder {
+position: absolute;
+top: 50%;
+left: 50%;
+transform: translate(-50%, -50%);
+text-align: center;
+color: #777;
+}
+.map-icon {
+font-size: 80px;
+}
+.map-placeholder h2 {
+color: #aaa; }
+/* Нижняя информация */
+.bottom-panel {
+position: absolute;
+left: 20px;
+right: 20px;
+bottom: 20px;
+display: flex;
+gap: 10px;
+z-index: 3;
+}
+.stat {
+min-width: 130px;
+padding: 10px 15px;
+background: rgba(15, 15, 15, 0.9);
+border: 1px solid #333;
+border-radius: 8px;
+}
+.stat span {
+display: block;
+color: #777;
+font-size: 12px;
+margin-bottom: 4px;
+}
+.stat b {
+font-size: 16px;
+}
+/* Телефон */
+@media (max-width: 700px) {
+.sidebar {
+width: 65px;
+}
+.menu-item {
+justify-content: center;
+}
+.menu-item span {
+display: none;
+}
+.main {
+left: 65px;
+}
+.logo span {
+display: none; }
+.turn-info {
+display: none;
+}
+.login-button {
+margin-left: auto;
+padding: 8px 10px;
+font-size: 12px;
+}
+.bottom-panel {
+overflow-x: auto;
+}
+.stat {
+min-width: 110px;
+}
+}

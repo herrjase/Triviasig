@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIgame — Карта</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="app">
+<header class="topbar">
+<div class="logo">
+⚔ <span>SIgame</span>
+</div>
+<div class="turn-info">
+Ход <b>1</b>
+</div>
+<button class="login-button">
+Войти через Discord
+</button>
+</header>
+<aside class="sidebar">
+<button class="menu-item active">
+🗺️ <span>Карта</span>
+</button>
+<button class="menu-item" onclick="location.href='/army'">
+⚔️ <span>Армия</span>
+</button>
+<button class="menu-item" onclick="location.href='/regions'">
+🏰 <span>Регионы</span>
+</button>
+<button class="menu-item" onclick="location.href='/mercenaries'">
+🪙 <span>Наёмники</span>
+</button>
+<button class="menu-item" onclick="location.href='/history'">
+📜 <span>История</span>
+</button>
+<button class="menu-item" onclick="location.href='/rating'">
+🏆 <span>Рейтинг</span>
+</button>
+<div class="sidebar-bottom">
+<button class="menu-item" onclick="location.href='/profile'">
+👤 <span>Профиль</span>
+</button>
+<button class="menu-item" onclick="location.href='/settings'">
+⚙️ <span>Настройки</span>
+</button>
+</div>
+</aside>
+<main class="main">
+<div class="map">
+<div class="map-title">
+Мировая карта
+</div>
+<div class="map-placeholder">
+<div class="map-icon">🌍</div>
+<h2>Карта SIgame</h2>
+<p>
+Здесь будет игровая карта мира
+</p>
+</div>
+</div>
+<div class="bottom-panel">
+<div class="stat">
+<span>Очки</span><b>0</b>
+</div>
+<div class="stat">
+<span>Доход</span>
+<b>0 / ход</b>
+</div>
+<div class="stat">
+<span>Регионов</span>
+<b>0</b>
+</div>
+<div class="stat">
+<span>Армий</span>
+<b>0</b>
+</div>
+</div>
+</main>
+</div>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
