@@ -1,269 +1,167 @@
 "use strict";
 
-/* ==========================================
-   SIgame — ИНТЕРАКТИВНАЯ КАРТА МИРА
-   ========================================== */
-
 document.addEventListener("DOMContentLoaded", function () {
-
     const mapStatus = document.getElementById("map-status");
-
     const regionPanel = document.getElementById("region-panel");
     const regionName = document.getElementById("region-name");
     const regionDescription = document.getElementById("region-description");
-
     const regionOwner = document.getElementById("region-owner");
     const regionArmy = document.getElementById("region-army");
     const regionPrice = document.getElementById("region-price");
-
     const closePanelButton = document.getElementById("close-panel");
     const regionsCount = document.getElementById("regions-count");
 
     let selectedLayer = null;
+    let regionsLayer = null;
 
-    let countriesLayer = null;
-    let countriesLoaded = 0;
-
-
-    /* ==========================================
-       1. СОЗДАНИЕ КАРТЫ
-       ========================================== */
-
+    // Создание карты
     const map = L.map("world-map", {
-
         center: [25, 10],
-
         zoom: 2,
-
         minZoom: 2,
         maxZoom: 10,
-
         zoomControl: true,
-
         worldCopyJump: true,
-
-        maxBounds: [
-            [-85, -180],
-            [85, 180]
-        ],
-
+        maxBounds: [[-85, -180], [85, 180]],
         maxBoundsViscosity: 0.7
-
     });
 
+    // Подложка OpenStreetMap
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        subdomains: "abc",
+        maxZoom: 19
+    }).addTo(map);
 
-    /* ==========================================
-       2. ГЕОГРАФИЧЕСКАЯ ПОДЛОЖКА
-       ========================================== */
+    map.attributionControl.addAttribution(
+        '<a href="https://gtamapdata.org/">GTAmap v1.1</a> — административные границы, CC BY 4.0'
+    );
 
-    L.tileLayer(
-        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        {
-            attribution:
-                '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
-
-            subdomains: "abc",
-
-            maxZoom: 19
-        }
-    ).addTo(map);
-
-
-    /* ==========================================
-       3. СТИЛЬ ТЕРРИТОРИЙ
-       ========================================== */
-
-    function getCountryStyle() {
-
+    // Стиль регионов
+    function getRegionStyle() {
         return {
-
             color: "#a4b6c2",
-
-            weight: 0.8,
-
+            weight: 0.7,
             opacity: 0.9,
-
             fillColor: "#405b6b",
-
             fillOpacity: 0.28
-
         };
-
     }
-
 
     function getSelectedStyle() {
-
         return {
-
             color: "#ffe58a",
-
             weight: 2.5,
-
             opacity: 1,
-
             fillColor: "#d5b44a",
-
             fillOpacity: 0.65
-
         };
-
     }
 
+    // Название региона
+    function getRegionName(feature) {
+        const p = feature.properties || {};
 
-    /* ==========================================
-       4. НАЗВАНИЕ СТРАНЫ
-       ========================================== */
+        return p.name ||
+            p.NAME ||
+            p.NAME_1 ||
+            p.region ||
+            p.admin1 ||
+            p.shapeName ||
+            "Неизвестный регион";
+    }
 
+    // Название страны
     function getCountryName(feature) {
+        const p = feature.properties || {};
 
-        const properties = feature.properties || {};
-
-        return (
-            properties.ADMIN ||
-            properties.name ||
-            properties.NAME ||
-            properties.admin ||
-            properties.NAME_EN ||
-            "Неизвестная территория"
-        );
-
+        return p.admin ||
+            p.country ||
+            p.country_name ||
+            p.ADMIN ||
+            p.NAME_0 ||
+            p.iso3 ||
+            p.ISO3 ||
+            "Страна не указана";
     }
 
-
-    /* ==========================================
-       5. ВЫБОР СТРАНЫ
-       ========================================== */
-
-    function selectCountry(layer, feature) {
-
-        if (selectedLayer) {
-
-            countriesLayer.resetStyle(selectedLayer);
-
+    // Выбор региона
+    function selectRegion(layer, feature) {
+        if (selectedLayer && regionsLayer) {
+            regionsLayer.resetStyle(selectedLayer);
         }
 
         selectedLayer = layer;
-
         layer.setStyle(getSelectedStyle());
 
         if (layer.bringToFront) {
-
             layer.bringToFront();
-
         }
 
-        const name = getCountryName(feature);
+        const name = getRegionName(feature);
+        const country = getCountryName(feature);
 
         regionName.textContent = name;
 
         regionDescription.textContent =
-            "Географическая территория на мировой карте SIgame. " +
-            "В дальнейшем здесь появятся игровые характеристики, " +
-            "владелец, армия и возможность захвата.";
+            "Административный регион страны: " + country +
+            ". Игровые характеристики и возможность захвата появятся позднее.";
 
         regionOwner.textContent = "Нейтральная территория";
-
         regionArmy.textContent = "Пока нет данных";
-
         regionPrice.textContent = "Будет рассчитана";
 
         regionPanel.classList.add("visible");
-
     }
 
-
-    /* ==========================================
-       6. ОБРАБОТКА КАЖДОЙ СТРАНЫ
-       ========================================== */
-
-    function onEachCountry(feature, layer) {
-
-        const name = getCountryName(feature);
+    // Обработка регионов
+    function onEachRegion(feature, layer) {
+        const name = getRegionName(feature);
+        const country = getCountryName(feature);
 
         layer.on({
-
             mouseover: function () {
-
                 if (layer !== selectedLayer) {
-
                     layer.setStyle({
-
                         color: "#e3edf4",
-
-                        weight: 1.5,
-
+                        weight: 1.4,
                         fillColor: "#6b8b9e",
-
                         fillOpacity: 0.5
-
                     });
-
                 }
-
             },
 
             mouseout: function () {
-
-                if (layer !== selectedLayer && countriesLayer) {
-
-                    countriesLayer.resetStyle(layer);
-
+                if (layer !== selectedLayer && regionsLayer) {
+                    regionsLayer.resetStyle(layer);
                 }
-
             },
 
             click: function () {
-
-                selectCountry(layer, feature);
-
+                selectRegion(layer, feature);
             }
-
         });
 
-
-        /* Подсказка при наведении */
-        layer.bindTooltip(name, {
-
+        layer.bindTooltip(name + " — " + country, {
             sticky: true,
-
             direction: "top",
-
             opacity: 0.95
-
         });
-
     }
 
-
-    /* ==========================================
-       7. ЗАГРУЗКА ГЕОГРАФИЧЕСКИХ ГРАНИЦ
-       ========================================== */
-
-    async function loadCountries() {
-
-        mapStatus.textContent = "Загрузка границ...";
-
-        /*
-         * Источник открытых географических данных.
-         * Пока используются границы стран.
-         */
+    // Загрузка карты административных регионов
+    async function loadRegions() {
+        mapStatus.textContent = "Загрузка регионов...";
 
         const geoJsonUrl =
-            "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson";
-
+            "https://data.gtamapdata.org/data/packages/v1.1/web/global_adm1_2020.geojson";
 
         try {
-
             const response = await fetch(geoJsonUrl);
 
             if (!response.ok) {
-
-                throw new Error(
-                    "Не удалось загрузить границы: HTTP " +
-                    response.status
-                );
-
+                throw new Error("HTTP " + response.status);
             }
 
             const geoData = await response.json();
@@ -273,51 +171,26 @@ document.addEventListener("DOMContentLoaded", function () {
                 !Array.isArray(geoData.features) ||
                 geoData.features.length === 0
             ) {
-
-                throw new Error(
-                    "Источник не содержит географических объектов."
-                );
-
+                throw new Error("GeoJSON не содержит регионов.");
             }
 
-
-            /* Создаём слой стран */
-
-            countriesLayer = L.geoJSON(geoData, {
-
-                style: getCountryStyle,
-
-                onEachFeature: onEachCountry
-
+            regionsLayer = L.geoJSON(geoData, {
+                style: getRegionStyle,
+                onEachFeature: onEachRegion
             }).addTo(map);
 
+            const count = geoData.features.length;
 
-            countriesLoaded = geoData.features.length;
-
-            regionsCount.textContent = countriesLoaded;
-
+            regionsCount.textContent = count.toLocaleString("ru-RU");
             mapStatus.textContent =
-                "Территорий: " + countriesLoaded;
-
-
-            /*
-             * Показываем весь мир.
-             * Ограничение масштаба не позволяет случайно
-             * улететь далеко за пределы карты.
-             */
+                "Регионов: " + count.toLocaleString("ru-RU");
 
             map.setView([25, 10], 2);
 
-
         } catch (error) {
+            console.error("Ошибка загрузки карты SIgame:", error);
 
-            console.error(
-                "Ошибка загрузки карты SIgame:",
-                error
-            );
-
-            mapStatus.textContent = "Ошибка загрузки границ";
-
+            mapStatus.textContent = "Ошибка загрузки регионов";
             regionsCount.textContent = "—";
 
             const errorBox = document.createElement("div");
@@ -325,59 +198,37 @@ document.addEventListener("DOMContentLoaded", function () {
             errorBox.className = "map-error";
 
             errorBox.innerHTML = `
-                <strong>Не удалось загрузить границы стран.</strong>
+                <strong>Не удалось загрузить границы регионов.</strong>
                 <p>
                     Проверь подключение к интернету и обнови страницу.
-                    Если ошибка повторяется, потребуется проверить
-                    доступность источника географических данных.
+                    Если ошибка повторяется, источник геоданных может быть
+                    временно недоступен.
                 </p>
             `;
 
             document.getElementById("world-map").appendChild(errorBox);
-
         }
-
     }
 
-
-    /* ==========================================
-       8. ЗАКРЫТИЕ ИНФОРМАЦИОННОЙ ПАНЕЛИ
-       ========================================== */
-
+    // Закрытие панели
     closePanelButton.addEventListener("click", function () {
-
         regionPanel.classList.remove("visible");
 
-        if (selectedLayer && countriesLayer) {
-
-            countriesLayer.resetStyle(selectedLayer);
-
+        if (selectedLayer && regionsLayer) {
+            regionsLayer.resetStyle(selectedLayer);
             selectedLayer = null;
-
         }
-
     });
 
-
-    /* ==========================================
-       9. КНОПКА ВХОДА
-       ========================================== */
-
+    // Кнопка входа
     document.getElementById("login-button")
         .addEventListener("click", function () {
-
             alert(
                 "Авторизация через Discord будет добавлена " +
                 "на следующем этапе разработки SIgame."
             );
-
         });
 
-
-    /* ==========================================
-       10. ЗАПУСК
-       ========================================== */
-
-    loadCountries();
-
+    // Запуск
+    loadRegions();
 });
