@@ -642,4 +642,41 @@ button {
     .bottom-panel .stat:nth-child(4) {
         display: none;
     }
+/* Сообщение об ошибке загрузки карты */
+
+.map-error {
+    position: absolute;
+
+    top: 50%;
+    left: 50%;
+
+    transform: translate(-50%, -50%);
+
+    width: 85%;
+    max-width: 400px;
+
+    padding: 20px;
+
+    background: rgba(20, 20, 20, 0.97);
+
+    border: 1px solid #884444;
+    border-radius: 12px;
+
+    color: #eeeeee;
+
+    text-align: center;
+
+    z-index: 800;
+}
+
+.map-error strong {
+    color: #ff9999;
+}
+
+.map-error p {
+    color: #bbbbbb;
+
+    font-size: 13px;
+    line-height: 1.5;
+}
 }
