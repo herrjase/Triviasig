@@ -155,7 +155,7 @@ document.addEventListener("DOMContentLoaded", function () {
         mapStatus.textContent = "Загрузка регионов...";
 
         const geoJsonUrl =
-            "https://data.gtamapdata.org/data/packages/v1.1/web/global_adm1_2020.geojson";
+    "https://gtamapdata.org/data/web/global_adm1_2020.geojson";
 
         try {
             const response = await fetch(geoJsonUrl);
