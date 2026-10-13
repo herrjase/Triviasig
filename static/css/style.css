@@ -642,6 +642,7 @@ button {
     .bottom-panel .stat:nth-child(4) {
         display: none;
     }
+}
 /* Сообщение об ошибке загрузки карты */
 
 .map-error {
@@ -678,5 +679,4 @@ button {
 
     font-size: 13px;
     line-height: 1.5;
-}
 }
