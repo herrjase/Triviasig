@@ -1,287 +1,267 @@
-import os
-import json
-import sqlite3
-import hashlib
-import urllib.request
-import re
+"use strict";
 
-from flask import Flask, render_template, jsonify
+document.addEventListener("DOMContentLoaded", function () {
+    const mapStatus = document.getElementById("map-status");
+    const regionPanel = document.getElementById("region-panel");
+    const regionName = document.getElementById("region-name");
+    const regionIdElement = document.getElementById("region-id");
+    const regionDescription = document.getElementById("region-description");
+    const regionOwner = document.getElementById("region-owner");
+    const regionArmy = document.getElementById("region-army");
+    const regionPrice = document.getElementById("region-price");
+    const closePanelButton = document.getElementById("close-panel");
+    const regionsCount = document.getElementById("regions-count");
 
-app = Flask(__name__)
+    let selectedLayer = null;
+    let regionsLayer = null;
 
-REGIONS_URL = (
-    "https://gtamapdata.org/data/web/global_adm1_2020.geojson"
-)
+    const NEUTRAL_FILL = "#405b6b";
+    const NEUTRAL_BORDER = "#a4b6c2";
+    const SELECTED_BORDER = "#ffe58a";
 
-os.makedirs(app.instance_path, exist_ok=True)
+    const map = L.map("world-map", {
+        center: [25, 10],
+        zoom: 2,
+        minZoom: 2,
+        maxZoom: 10,
+        zoomControl: true,
+        worldCopyJump: true,
+        maxBounds: [[-85, -180], [85, 180]],
+        maxBoundsViscosity: 0.7
+    });
 
-DB_PATH = os.path.join(app.instance_path, "sigame.db")
-CACHE_PATH = os.path.join(app.instance_path, "regions.geojson")
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        subdomains: "abc",
+        maxZoom: 19
+    }).addTo(map);
 
-NEUTRAL_OWNER = "Нейтральная территория"
-DEFAULT_PLAYER_COLOR = "#808080"
-DEFAULT_TEAM_COLOR = "#808080"
+    map.attributionControl.addAttribution(
+        '<a href="https://gtamapdata.org/">GTAmap v1.1</a> — административные границы, CC BY 4.0'
+    );
 
+    // Принимаем только корректный HEX-цвет.
+    function normalizeColor(value) {
+        if (
+            typeof value === "string" &&
+            /^#[0-9a-fA-F]{6}$/.test(value)
+        ) {
+            return value;
+        }
 
-def get_db():
-    connection = sqlite3.connect(DB_PATH)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-
-    connection.execute("""
-        CREATE TABLE IF NOT EXISTS teams (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            color TEXT NOT NULL DEFAULT '#808080'
-        )
-    """)
-
-    connection.execute("""
-        CREATE TABLE IF NOT EXISTS players (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            personal_color TEXT NOT NULL DEFAULT '#808080',
-            team_id INTEGER,
-            FOREIGN KEY (team_id)
-                REFERENCES teams(id)
-                ON DELETE SET NULL
-        )
-    """)
-
-    connection.execute("""
-        CREATE TABLE IF NOT EXISTS regions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            source_key TEXT UNIQUE NOT NULL,
-            name TEXT NOT NULL,
-            country TEXT NOT NULL,
-            owner TEXT DEFAULT 'Нейтральная территория',
-            army INTEGER DEFAULT 0,
-            price INTEGER DEFAULT 0
-        )
-    """)
-
-    # Безопасное обновление существующей базы данных.
-    columns = {
-        row["name"]
-        for row in connection.execute(
-            "PRAGMA table_info(regions)"
-        ).fetchall()
+        return null;
     }
 
-    if "owner_player_id" not in columns:
-        connection.execute("""
-            ALTER TABLE regions
-            ADD COLUMN owner_player_id INTEGER
-            REFERENCES players(id)
-            ON DELETE SET NULL
-        """)
+    // Определяем цвет региона по владельцу и его команде.
+    function getRegionColor(feature) {
+        const p = feature.properties || {};
 
-    connection.commit()
-    return connection
+        // Приоритет у цвета команды.
+        if (p.team_id !== null && p.team_id !== undefined) {
+            const teamColor = normalizeColor(p.team_color);
 
+            if (teamColor) {
+                return teamColor;
+            }
+        }
 
-def get_region_data():
-    if os.path.exists(CACHE_PATH):
-        with open(CACHE_PATH, "r", encoding="utf-8") as file:
-            return json.load(file)
+        // Если игрок не состоит в команде — личный цвет.
+        if (p.owner_player_id !== null &&
+            p.owner_player_id !== undefined) {
+            const playerColor = normalizeColor(p.player_color);
 
-    request = urllib.request.Request(
-        REGIONS_URL,
-        headers={"User-Agent": "SIgame/1.0"}
-    )
+            if (playerColor) {
+                return playerColor;
+            }
+        }
 
-    with urllib.request.urlopen(request, timeout=60) as response:
-        data = json.loads(response.read().decode("utf-8"))
-
-    if not isinstance(data.get("features"), list):
-        raise ValueError("Источник не содержит список регионов")
-
-    with open(CACHE_PATH, "w", encoding="utf-8") as file:
-        json.dump(data, file, ensure_ascii=False)
-
-    return data
-
-
-def get_region_name(properties):
-    return (
-        properties.get("name")
-        or properties.get("NAME")
-        or properties.get("NAME_1")
-        or properties.get("region")
-        or properties.get("admin1")
-        or properties.get("shapeName")
-        or "Неизвестный регион"
-    )
-
-
-def get_country_name(properties):
-    return (
-        properties.get("admin")
-        or properties.get("country")
-        or properties.get("country_name")
-        or properties.get("ADMIN")
-        or properties.get("NAME_0")
-        or properties.get("iso3")
-        or properties.get("ISO3")
-        or "Страна не указана"
-    )
-
-
-def get_source_key(feature):
-    properties = feature.get("properties") or {}
-
-    identity = {
-        "name": get_region_name(properties),
-        "country": get_country_name(properties),
-        "geometry": feature.get("geometry")
+        // Нейтральные регионы сохраняют прежний цвет.
+        return NEUTRAL_FILL;
     }
 
-    encoded = json.dumps(
-        identity,
-        sort_keys=True,
-        ensure_ascii=False,
-        separators=(",", ":")
-    ).encode("utf-8")
+    function getRegionStyle(feature) {
+        return {
+            color: NEUTRAL_BORDER,
+            weight: 0.7,
+            opacity: 0.9,
+            fillColor: getRegionColor(feature),
+            fillOpacity: 0.65
+        };
+    }
 
-    return hashlib.sha256(encoded).hexdigest()
+    function getSelectedStyle(feature) {
+        return {
+            color: SELECTED_BORDER,
+            weight: 2.5,
+            opacity: 1,
+            fillColor: getRegionColor(feature),
+            fillOpacity: 0.85
+        };
+    }
 
+    function getRegionName(feature) {
+        const p = feature.properties || {};
 
-def synchronize_regions(data):
-    connection = get_db()
+        return p.name ||
+            p.NAME ||
+            p.NAME_1 ||
+            p.region ||
+            p.admin1 ||
+            p.shapeName ||
+            "Неизвестный регион";
+    }
 
-    try:
-        # Добавляем новые регионы, не перезаписывая существующие.
-        for feature in data["features"]:
-            properties = feature.get("properties") or {}
+    function getCountryName(feature) {
+        const p = feature.properties || {};
 
-            name = get_region_name(properties)
-            country = get_country_name(properties)
-            source_key = get_source_key(feature)
+        return p.admin ||
+            p.country ||
+            p.country_name ||
+            p.ADMIN ||
+            p.NAME_0 ||
+            p.iso3 ||
+            p.ISO3 ||
+            "Страна не указана";
+    }
 
-            connection.execute("""
-                INSERT OR IGNORE INTO regions
-                    (source_key, name, country)
-                VALUES (?, ?, ?)
-            """, (source_key, name, country))
+    function selectRegion(layer, feature) {
+        if (selectedLayer && regionsLayer) {
+            regionsLayer.resetStyle(selectedLayer);
+        }
 
-        connection.commit()
+        selectedLayer = layer;
+        layer.setStyle(getSelectedStyle(feature));
 
-        for feature in data["features"]:
-            properties = feature.get("properties") or {}
-            source_key = get_source_key(feature)
+        if (layer.bringToFront) {
+            layer.bringToFront();
+        }
 
-            row = connection.execute("""
-                SELECT
-                    regions.id,
-                    regions.owner,
-                    regions.owner_player_id,
-                    regions.army,
-                    regions.price,
-                    players.username,
-                    players.personal_color,
-                    teams.id AS team_id,
-                    teams.name AS team_name,
-                    teams.color AS team_color
-                FROM regions
-                LEFT JOIN players
-                    ON players.id = regions.owner_player_id
-                LEFT JOIN teams
-                    ON teams.id = players.team_id
-                WHERE regions.source_key = ?
-            """, (source_key,)).fetchone()
+        const p = feature.properties || {};
 
-            properties["region_id"] = (
-                "SIG-" + str(row["id"]).zfill(4)
-            )
+        regionName.textContent = getRegionName(feature);
+        regionIdElement.textContent = p.region_id || "Нет ID";
 
-            # Владелец — именно игрок, не его команда.
-            if row["username"]:
-                properties["owner"] = row["username"]
-            else:
-                properties["owner"] = (
-                    row["owner"] or NEUTRAL_OWNER
-                )
+        regionDescription.textContent =
+            "Административный регион страны: " +
+            getCountryName(feature) + ".";
 
-            properties["owner_player_id"] = row["owner_player_id"]
-            properties["army"] = row["army"] or 0
-            properties["price"] = row["price"] or 0
+        // Показываем имя игрока, а не название команды.
+        regionOwner.textContent =
+            p.owner || "Нейтральная территория";
 
-            # Цвета для карты.
-            properties["player_color"] = (
-                row["personal_color"] or DEFAULT_PLAYER_COLOR
-            ) if row["username"] else None
+        regionArmy.textContent =
+            p.army !== undefined ? p.army : "Пока нет данных";
 
-            properties["team_id"] = row["team_id"]
-            properties["team_name"] = row["team_name"]
-            properties["team_color"] = row["team_color"]
+        regionPrice.textContent =
+            p.price !== undefined && p.price > 0
+                ? p.price
+                : "Будет рассчитана";
 
-            feature["properties"] = properties
+        regionPanel.classList.add("visible");
+    }
 
-        return data
+    function onEachRegion(feature, layer) {
+        const name = getRegionName(feature);
+        const country = getCountryName(feature);
 
-    finally:
-        connection.close()
+        layer.on({
+            mouseover: function () {
+                if (layer !== selectedLayer) {
+                    layer.setStyle({
+                        color: "#e3edf4",
+                        weight: 1.4,
+                        fillColor: getRegionColor(feature),
+                        fillOpacity: 0.85
+                    });
+                }
+            },
 
+            mouseout: function () {
+                if (layer !== selectedLayer && regionsLayer) {
+                    regionsLayer.resetStyle(layer);
+                }
+            },
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+            click: function () {
+                selectRegion(layer, feature);
+            }
+        });
 
+        layer.bindTooltip(name + " — " + country, {
+            sticky: true,
+            direction: "top",
+            opacity: 0.95
+        });
+    }
 
-@app.route("/api/regions")
-def api_regions():
-    try:
-        data = get_region_data()
-        data = synchronize_regions(data)
-        return jsonify(data)
+    async function loadRegions() {
+        mapStatus.textContent = "Загрузка регионов...";
 
-    except Exception as error:
-        app.logger.exception("Не удалось загрузить регионы")
+        try {
+            const response = await fetch("/api/regions");
 
-        return jsonify({
-            "error": "Не удалось загрузить регионы",
-            "details": str(error)
-        }), 500
+            if (!response.ok) {
+                throw new Error("HTTP " + response.status);
+            }
 
+            const geoData = await response.json();
 
-@app.route("/profile")
-def profile():
-    return render_template("profile.html")
+            if (!Array.isArray(geoData.features) ||
+                geoData.features.length === 0) {
+                throw new Error(
+                    geoData.details || "Регионы не найдены"
+                );
+            }
 
+            regionsLayer = L.geoJSON(geoData, {
+                style: getRegionStyle,
+                onEachFeature: onEachRegion
+            }).addTo(map);
 
-@app.route("/army")
-def army():
-    return render_template("army.html")
+            const count = geoData.features.length;
 
+            regionsCount.textContent =
+                count.toLocaleString("ru-RU");
 
-@app.route("/regions")
-def regions():
-    return render_template("regions.html")
+            mapStatus.textContent =
+                "Регионов: " + count.toLocaleString("ru-RU");
 
+            map.setView([25, 10], 2);
 
-@app.route("/mercenaries")
-def mercenaries():
-    return render_template("mercenaries.html")
+        } catch (error) {
+            console.error("Ошибка загрузки регионов:", error);
 
+            mapStatus.textContent = "Ошибка загрузки регионов";
+            regionsCount.textContent = "—";
 
-@app.route("/history")
-def history():
-    return render_template("history.html")
+            const errorBox = document.createElement("div");
+            errorBox.className = "map-error";
+            errorBox.textContent =
+                "Не удалось загрузить регионы. Проверь запуск Flask и подключение к интернету.";
 
+            document.getElementById("world-map")
+                .appendChild(errorBox);
+        }
+    }
 
-@app.route("/rating")
-def rating():
-    return render_template("rating.html")
+    closePanelButton.addEventListener("click", function () {
+        regionPanel.classList.remove("visible");
 
+        if (selectedLayer && regionsLayer) {
+            regionsLayer.resetStyle(selectedLayer);
+            selectedLayer = null;
+        }
 
-@app.route("/settings")
-def settings():
-    return render_template("settings.html")
+        regionIdElement.textContent = "—";
+    });
 
+    document.getElementById("login-button")
+        .addEventListener("click", function () {
+            alert(
+                "Авторизация через Discord будет добавлена позднее."
+            );
+        });
 
-if __name__ == "__main__":
-    app.run(
-        host="127.0.0.1",
-        port=8000,
-        debug=True
-    )
+    loadRegions();
+});
