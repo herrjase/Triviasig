@@ -39,7 +39,7 @@ document.addEventListener("DOMContentLoaded", function () {
         '<a href="https://gtamapdata.org/">GTAmap v1.1</a> — административные границы, CC BY 4.0'
     );
 
-    // Стиль регионов
+    // Обычный стиль региона
     function getRegionStyle() {
         return {
             color: "#a4b6c2",
@@ -88,15 +88,13 @@ document.addEventListener("DOMContentLoaded", function () {
             "Страна не указана";
     }
 
-    // Назначение уникальных ID регионам
+    // Назначение ID регионам
     function assignRegionIds(features) {
         features.forEach(function (feature, index) {
             if (!feature.properties) {
                 feature.properties = {};
             }
 
-            // ID сохраняется при повторной загрузке
-            // того же набора данных в том же порядке
             feature.properties.region_id =
                 "SIG-" + String(index + 1).padStart(4, "0");
         });
@@ -154,4 +152,108 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (layer !== selectedLayer && regionsLayer) {
                     regionsLayer.resetStyle(layer);
                 }
-           
+            },
+
+            click: function () {
+                selectRegion(layer, feature);
+            }
+        });
+
+        layer.bindTooltip(name + " — " + country, {
+            sticky: true,
+            direction: "top",
+            opacity: 0.95
+        });
+    }
+
+    // Загрузка административных регионов
+    async function loadRegions() {
+        mapStatus.textContent = "Загрузка регионов...";
+
+        const geoJsonUrl =
+            "https://gtamapdata.org/data/web/global_adm1_2020.geojson";
+
+        try {
+            const response = await fetch(geoJsonUrl);
+
+            if (!response.ok) {
+                throw new Error("HTTP " + response.status);
+            }
+
+            const geoData = await response.json();
+
+            if (
+                !geoData ||
+                !Array.isArray(geoData.features) ||
+                geoData.features.length === 0
+            ) {
+                throw new Error("GeoJSON не содержит регионов.");
+            }
+
+            // Назначаем ID перед отображением регионов
+            assignRegionIds(geoData.features);
+
+            // Добавляем регионы на карту
+            regionsLayer = L.geoJSON(geoData, {
+                style: getRegionStyle,
+                onEachFeature: onEachRegion
+            }).addTo(map);
+
+            const count = geoData.features.length;
+
+            regionsCount.textContent =
+                count.toLocaleString("ru-RU");
+
+            mapStatus.textContent =
+                "Регионов: " + count.toLocaleString("ru-RU");
+
+            map.setView([25, 10], 2);
+
+        } catch (error) {
+            console.error("Ошибка загрузки карты SIgame:", error);
+
+            mapStatus.textContent = "Ошибка загрузки регионов";
+            regionsCount.textContent = "—";
+
+            const errorBox = document.createElement("div");
+
+            errorBox.className = "map-error";
+
+            errorBox.innerHTML = `
+                <strong>Не удалось загрузить границы регионов.</strong>
+                <p>
+                    Проверь подключение к интернету и обнови страницу.
+                    Если ошибка повторяется, источник геоданных может быть
+                    временно недоступен.
+                </p>
+            `;
+
+            document.getElementById("world-map")
+                .appendChild(errorBox);
+        }
+    }
+
+    // Закрытие панели
+    closePanelButton.addEventListener("click", function () {
+        regionPanel.classList.remove("visible");
+
+        if (selectedLayer && regionsLayer) {
+            regionsLayer.resetStyle(selectedLayer);
+            selectedLayer = null;
+        }
+
+        regionIdElement.textContent = "—";
+    });
+
+    // Кнопка входа через Discord
+    document.getElementById("login-button")
+        .addEventListener("click", function () {
+            alert(
+                "Авторизация через Discord будет добавлена " +
+                "на следующем этапе разработки SIgame."
+            );
+        });
+
+    // Запуск
+    loadRegions();
+});
