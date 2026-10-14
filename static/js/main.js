@@ -15,6 +15,10 @@ document.addEventListener("DOMContentLoaded", function () {
     let selectedLayer = null;
     let regionsLayer = null;
 
+    const NEUTRAL_FILL = "#405b6b";
+    const NEUTRAL_BORDER = "#a4b6c2";
+    const SELECTED_BORDER = "#ffe58a";
+
     const map = L.map("world-map", {
         center: [25, 10],
         zoom: 2,
@@ -37,23 +41,62 @@ document.addEventListener("DOMContentLoaded", function () {
         '<a href="https://gtamapdata.org/">GTAmap v1.1</a> — административные границы, CC BY 4.0'
     );
 
-    function getRegionStyle() {
+    // Принимаем только корректный HEX-цвет.
+    function normalizeColor(value) {
+        if (
+            typeof value === "string" &&
+            /^#[0-9a-fA-F]{6}$/.test(value)
+        ) {
+            return value;
+        }
+
+        return null;
+    }
+
+    // Определяем цвет региона по владельцу и его команде.
+    function getRegionColor(feature) {
+        const p = feature.properties || {};
+
+        // Приоритет у цвета команды.
+        if (p.team_id !== null && p.team_id !== undefined) {
+            const teamColor = normalizeColor(p.team_color);
+
+            if (teamColor) {
+                return teamColor;
+            }
+        }
+
+        // Если игрок не состоит в команде — личный цвет.
+        if (p.owner_player_id !== null &&
+            p.owner_player_id !== undefined) {
+            const playerColor = normalizeColor(p.player_color);
+
+            if (playerColor) {
+                return playerColor;
+            }
+        }
+
+        // Нейтральные регионы сохраняют прежний цвет.
+        return NEUTRAL_FILL;
+    }
+
+    function getRegionStyle(feature) {
         return {
-            color: "#a4b6c2",
+            color: NEUTRAL_BORDER,
             weight: 0.7,
             opacity: 0.9,
-            fillColor: "#405b6b",
-            fillOpacity: 0.28
+            fillColor: getRegionColor(feature),
+            fillOpacity: 0.65
         };
     }
 
-    function getSelectedStyle() {
+    function getSelectedStyle(feature) {
         return {
-            color: "#ffe58a",
+            color: SELECTED_BORDER,
             weight: 2.5,
             opacity: 1,
-            fillColor: "#d5b44a",
-            fillOpacity: 0.65
+            fillColor: getRegionColor(feature),
+            fillOpacity: 0.85
         };
     }
 
@@ -88,22 +131,22 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         selectedLayer = layer;
-        layer.setStyle(getSelectedStyle());
+        layer.setStyle(getSelectedStyle(feature));
 
         if (layer.bringToFront) {
             layer.bringToFront();
         }
 
         const p = feature.properties || {};
-        const name = getRegionName(feature);
-        const country = getCountryName(feature);
 
-        regionName.textContent = name;
+        regionName.textContent = getRegionName(feature);
         regionIdElement.textContent = p.region_id || "Нет ID";
 
         regionDescription.textContent =
-            "Административный регион страны: " + country + ".";
+            "Административный регион страны: " +
+            getCountryName(feature) + ".";
 
+        // Показываем имя игрока, а не название команды.
         regionOwner.textContent =
             p.owner || "Нейтральная территория";
 
@@ -128,8 +171,8 @@ document.addEventListener("DOMContentLoaded", function () {
                     layer.setStyle({
                         color: "#e3edf4",
                         weight: 1.4,
-                        fillColor: "#6b8b9e",
-                        fillOpacity: 0.5
+                        fillColor: getRegionColor(feature),
+                        fillOpacity: 0.85
                     });
                 }
             },
@@ -178,7 +221,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
             const count = geoData.features.length;
 
-            regionsCount.textContent = count.toLocaleString("ru-RU");
+            regionsCount.textContent =
+                count.toLocaleString("ru-RU");
+
             mapStatus.textContent =
                 "Регионов: " + count.toLocaleString("ru-RU");
 
