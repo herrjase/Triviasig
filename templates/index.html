@@ -11,7 +11,7 @@
         href="{{ url_for('static', filename='css/style.css') }}"
     >
 
-    <!-- Библиотека интерактивных карт Leaflet -->
+    <!-- Leaflet -->
     <link
         rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -38,7 +38,6 @@
         </button>
 
     </header>
-
 
     <!-- Боковое меню -->
     <aside class="sidebar">
@@ -81,7 +80,6 @@
 
     </aside>
 
-
     <!-- Основная область -->
     <main class="main">
 
@@ -92,10 +90,10 @@
                 <span id="map-status">Загрузка карты...</span>
             </div>
 
-            <!-- Здесь отображается настоящая карта -->
+            <!-- Карта -->
             <div id="world-map"></div>
 
-            <!-- Информация о выбранном регионе -->
+            <!-- Информация о регионе -->
             <section class="region-panel" id="region-panel">
 
                 <button
@@ -104,15 +102,23 @@
                     aria-label="Закрыть информацию"
                 >✕</button>
 
-                <div class="region-label">ВЫБРАННАЯ ТЕРРИТОРИЯ</div>
+                <div class="region-label">
+                    ВЫБРАННАЯ ТЕРРИТОРИЯ
+                </div>
 
                 <h2 id="region-name">Выберите регион</h2>
 
                 <p id="region-description">
-                    Нажмите на любуй регион на карте, чтобы посмотреть информацию.
+                    Нажмите на любой регион карты, чтобы посмотреть информацию.
                 </p>
 
                 <div class="region-divider"></div>
+
+                <!-- Уникальный ID -->
+                <div class="region-stat">
+                    <span>ID региона</span>
+                    <b id="region-id">—</b>
+                </div>
 
                 <div class="region-stat">
                     <span>Владелец</span>
@@ -139,8 +145,7 @@
 
             </section>
 
-
-            <!-- Легенда карты -->
+            <!-- Легенда -->
             <div class="map-legend">
 
                 <div class="legend-title">Обозначения</div>
@@ -159,8 +164,7 @@
 
         </section>
 
-
-        <!-- Нижняя панель статистики -->
+        <!-- Статистика -->
         <div class="bottom-panel">
 
             <div class="stat">
@@ -189,11 +193,9 @@
 
 </div>
 
-
-<!-- Leaflet -->
+<!-- Скрипты Leaflet и SIgame -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<!-- Логика карты SIgame -->
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
 </body>
