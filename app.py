@@ -3,6 +3,7 @@ import json
 import sqlite3
 import hashlib
 import urllib.request
+import re
 
 from flask import Flask, render_template, jsonify
 
@@ -17,10 +18,35 @@ os.makedirs(app.instance_path, exist_ok=True)
 DB_PATH = os.path.join(app.instance_path, "sigame.db")
 CACHE_PATH = os.path.join(app.instance_path, "regions.geojson")
 
+NEUTRAL_OWNER = "Нейтральная территория"
+DEFAULT_PLAYER_COLOR = "#808080"
+DEFAULT_TEAM_COLOR = "#808080"
+
 
 def get_db():
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS teams (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            color TEXT NOT NULL DEFAULT '#808080'
+        )
+    """)
+
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS players (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            personal_color TEXT NOT NULL DEFAULT '#808080',
+            team_id INTEGER,
+            FOREIGN KEY (team_id)
+                REFERENCES teams(id)
+                ON DELETE SET NULL
+        )
+    """)
 
     connection.execute("""
         CREATE TABLE IF NOT EXISTS regions (
@@ -33,6 +59,22 @@ def get_db():
             price INTEGER DEFAULT 0
         )
     """)
+
+    # Безопасное обновление существующей базы данных.
+    columns = {
+        row["name"]
+        for row in connection.execute(
+            "PRAGMA table_info(regions)"
+        ).fetchall()
+    }
+
+    if "owner_player_id" not in columns:
+        connection.execute("""
+            ALTER TABLE regions
+            ADD COLUMN owner_player_id INTEGER
+            REFERENCES players(id)
+            ON DELETE SET NULL
+        """)
 
     connection.commit()
     return connection
@@ -108,6 +150,7 @@ def synchronize_regions(data):
     connection = get_db()
 
     try:
+        # Добавляем новые регионы, не перезаписывая существующие.
         for feature in data["features"]:
             properties = feature.get("properties") or {}
 
@@ -127,17 +170,50 @@ def synchronize_regions(data):
             properties = feature.get("properties") or {}
             source_key = get_source_key(feature)
 
-            row = connection.execute(
-                "SELECT * FROM regions WHERE source_key = ?",
-                (source_key,)
-            ).fetchone()
+            row = connection.execute("""
+                SELECT
+                    regions.id,
+                    regions.owner,
+                    regions.owner_player_id,
+                    regions.army,
+                    regions.price,
+                    players.username,
+                    players.personal_color,
+                    teams.id AS team_id,
+                    teams.name AS team_name,
+                    teams.color AS team_color
+                FROM regions
+                LEFT JOIN players
+                    ON players.id = regions.owner_player_id
+                LEFT JOIN teams
+                    ON teams.id = players.team_id
+                WHERE regions.source_key = ?
+            """, (source_key,)).fetchone()
 
             properties["region_id"] = (
                 "SIG-" + str(row["id"]).zfill(4)
             )
-            properties["owner"] = row["owner"]
-            properties["army"] = row["army"]
-            properties["price"] = row["price"]
+
+            # Владелец — именно игрок, не его команда.
+            if row["username"]:
+                properties["owner"] = row["username"]
+            else:
+                properties["owner"] = (
+                    row["owner"] or NEUTRAL_OWNER
+                )
+
+            properties["owner_player_id"] = row["owner_player_id"]
+            properties["army"] = row["army"] or 0
+            properties["price"] = row["price"] or 0
+
+            # Цвета для карты.
+            properties["player_color"] = (
+                row["personal_color"] or DEFAULT_PLAYER_COLOR
+            ) if row["username"] else None
+
+            properties["team_id"] = row["team_id"]
+            properties["team_name"] = row["team_name"]
+            properties["team_color"] = row["team_color"]
 
             feature["properties"] = properties
 
@@ -161,6 +237,7 @@ def api_regions():
 
     except Exception as error:
         app.logger.exception("Не удалось загрузить регионы")
+
         return jsonify({
             "error": "Не удалось загрузить регионы",
             "details": str(error)
