@@ -15,7 +15,6 @@ document.addEventListener("DOMContentLoaded", function () {
     let selectedLayer = null;
     let regionsLayer = null;
 
-    // Создание карты
     const map = L.map("world-map", {
         center: [25, 10],
         zoom: 2,
@@ -27,7 +26,6 @@ document.addEventListener("DOMContentLoaded", function () {
         maxBoundsViscosity: 0.7
     });
 
-    // Подложка OpenStreetMap
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution:
             '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -39,7 +37,6 @@ document.addEventListener("DOMContentLoaded", function () {
         '<a href="https://gtamapdata.org/">GTAmap v1.1</a> — административные границы, CC BY 4.0'
     );
 
-    // Обычный стиль региона
     function getRegionStyle() {
         return {
             color: "#a4b6c2",
@@ -50,7 +47,6 @@ document.addEventListener("DOMContentLoaded", function () {
         };
     }
 
-    // Стиль выбранного региона
     function getSelectedStyle() {
         return {
             color: "#ffe58a",
@@ -61,7 +57,6 @@ document.addEventListener("DOMContentLoaded", function () {
         };
     }
 
-    // Название региона
     function getRegionName(feature) {
         const p = feature.properties || {};
 
@@ -74,7 +69,6 @@ document.addEventListener("DOMContentLoaded", function () {
             "Неизвестный регион";
     }
 
-    // Название страны
     function getCountryName(feature) {
         const p = feature.properties || {};
 
@@ -88,19 +82,6 @@ document.addEventListener("DOMContentLoaded", function () {
             "Страна не указана";
     }
 
-    // Назначение ID регионам
-    function assignRegionIds(features) {
-        features.forEach(function (feature, index) {
-            if (!feature.properties) {
-                feature.properties = {};
-            }
-
-            feature.properties.region_id =
-                "SIG-" + String(index + 1).padStart(4, "0");
-        });
-    }
-
-    // Выбор региона
     function selectRegion(layer, feature) {
         if (selectedLayer && regionsLayer) {
             regionsLayer.resetStyle(selectedLayer);
@@ -113,25 +94,30 @@ document.addEventListener("DOMContentLoaded", function () {
             layer.bringToFront();
         }
 
+        const p = feature.properties || {};
         const name = getRegionName(feature);
         const country = getCountryName(feature);
-        const regionId = feature.properties.region_id;
 
         regionName.textContent = name;
-        regionIdElement.textContent = regionId;
+        regionIdElement.textContent = p.region_id || "Нет ID";
 
         regionDescription.textContent =
-            "Административный регион страны: " + country +
-            ". Игровые характеристики и возможность захвата появятся позднее.";
+            "Административный регион страны: " + country + ".";
 
-        regionOwner.textContent = "Нейтральная территория";
-        regionArmy.textContent = "Пока нет данных";
-        regionPrice.textContent = "Будет рассчитана";
+        regionOwner.textContent =
+            p.owner || "Нейтральная территория";
+
+        regionArmy.textContent =
+            p.army !== undefined ? p.army : "Пока нет данных";
+
+        regionPrice.textContent =
+            p.price !== undefined && p.price > 0
+                ? p.price
+                : "Будет рассчитана";
 
         regionPanel.classList.add("visible");
     }
 
-    // Обработка регионов
     function onEachRegion(feature, layer) {
         const name = getRegionName(feature);
         const country = getCountryName(feature);
@@ -166,15 +152,11 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    // Загрузка административных регионов
     async function loadRegions() {
         mapStatus.textContent = "Загрузка регионов...";
 
-        const geoJsonUrl =
-            "https://gtamapdata.org/data/web/global_adm1_2020.geojson";
-
         try {
-            const response = await fetch(geoJsonUrl);
+            const response = await fetch("/api/regions");
 
             if (!response.ok) {
                 throw new Error("HTTP " + response.status);
@@ -182,18 +164,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
             const geoData = await response.json();
 
-            if (
-                !geoData ||
-                !Array.isArray(geoData.features) ||
-                geoData.features.length === 0
-            ) {
-                throw new Error("GeoJSON не содержит регионов.");
+            if (!Array.isArray(geoData.features) ||
+                geoData.features.length === 0) {
+                throw new Error(
+                    geoData.details || "Регионы не найдены"
+                );
             }
 
-            // Назначаем ID перед отображением регионов
-            assignRegionIds(geoData.features);
-
-            // Добавляем регионы на карту
             regionsLayer = L.geoJSON(geoData, {
                 style: getRegionStyle,
                 onEachFeature: onEachRegion
@@ -201,39 +178,28 @@ document.addEventListener("DOMContentLoaded", function () {
 
             const count = geoData.features.length;
 
-            regionsCount.textContent =
-                count.toLocaleString("ru-RU");
-
+            regionsCount.textContent = count.toLocaleString("ru-RU");
             mapStatus.textContent =
                 "Регионов: " + count.toLocaleString("ru-RU");
 
             map.setView([25, 10], 2);
 
         } catch (error) {
-            console.error("Ошибка загрузки карты SIgame:", error);
+            console.error("Ошибка загрузки регионов:", error);
 
             mapStatus.textContent = "Ошибка загрузки регионов";
             regionsCount.textContent = "—";
 
             const errorBox = document.createElement("div");
-
             errorBox.className = "map-error";
-
-            errorBox.innerHTML = `
-                <strong>Не удалось загрузить границы регионов.</strong>
-                <p>
-                    Проверь подключение к интернету и обнови страницу.
-                    Если ошибка повторяется, источник геоданных может быть
-                    временно недоступен.
-                </p>
-            `;
+            errorBox.textContent =
+                "Не удалось загрузить регионы. Проверь запуск Flask и подключение к интернету.";
 
             document.getElementById("world-map")
                 .appendChild(errorBox);
         }
     }
 
-    // Закрытие панели
     closePanelButton.addEventListener("click", function () {
         regionPanel.classList.remove("visible");
 
@@ -245,15 +211,12 @@ document.addEventListener("DOMContentLoaded", function () {
         regionIdElement.textContent = "—";
     });
 
-    // Кнопка входа через Discord
     document.getElementById("login-button")
         .addEventListener("click", function () {
             alert(
-                "Авторизация через Discord будет добавлена " +
-                "на следующем этапе разработки SIgame."
+                "Авторизация через Discord будет добавлена позднее."
             );
         });
 
-    // Запуск
     loadRegions();
 });
