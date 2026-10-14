@@ -3,7 +3,6 @@ import json
 import sqlite3
 import hashlib
 import urllib.request
-import re
 
 from flask import Flask, render_template, jsonify
 
@@ -60,7 +59,6 @@ def get_db():
         )
     """)
 
-    # Безопасное обновление существующей базы данных.
     columns = {
         row["name"]
         for row in connection.execute(
@@ -146,11 +144,87 @@ def get_source_key(feature):
     return hashlib.sha256(encoded).hexdigest()
 
 
+def create_test_players(connection):
+    """Создаёт тестовые команды и игроков."""
+
+    # Тестовые команды.
+    connection.execute("""
+        INSERT OR IGNORE INTO teams (name, color)
+        VALUES ('Зелёные', '#00aa00')
+    """)
+
+    connection.execute("""
+        INSERT OR IGNORE INTO teams (name, color)
+        VALUES ('Фиолетовые', '#800080')
+    """)
+
+    teams = {
+        row["name"]: row["id"]
+        for row in connection.execute(
+            "SELECT id, name FROM teams"
+        ).fetchall()
+    }
+
+    # Имя, личный цвет, команда, занятые регионы.
+    test_players = [
+        ("Шикан", "#ff0000", None, ["SIG-3126"]),
+        (
+            "Котокей",
+            "#00aa00",
+            teams["Зелёные"],
+            ["SIG-2542", "SIG-0922"]
+        ),
+        (
+            "PeterSheff",
+            "#0000ff",
+            teams["Зелёные"],
+            ["SIG-2518"]
+        ),
+        (
+            "ШИЗГИС",
+            "#800080",
+            teams["Фиолетовые"],
+            ["SIG-1473"]
+        ),
+    ]
+
+    for username, color, team_id, region_ids in test_players:
+        connection.execute("""
+            INSERT INTO players (
+                username,
+                personal_color,
+                team_id
+            )
+            VALUES (?, ?, ?)
+            ON CONFLICT(username) DO UPDATE SET
+                personal_color = excluded.personal_color,
+                team_id = excluded.team_id
+        """, (username, color, team_id))
+
+        player = connection.execute("""
+            SELECT id
+            FROM players
+            WHERE username = ?
+        """, (username,)).fetchone()
+
+        for region_id in region_ids:
+            numeric_id = int(region_id.replace("SIG-", ""))
+
+            connection.execute("""
+                UPDATE regions
+                SET owner_player_id = ?,
+                    owner = ?
+                WHERE id = ?
+            """, (player["id"], username, numeric_id))
+
+    connection.commit()
+
+
 def synchronize_regions(data):
     connection = get_db()
 
     try:
-        # Добавляем новые регионы, не перезаписывая существующие.
+        # Добавляем регионы, не перезаписывая существующие записи.
         for feature in data["features"]:
             properties = feature.get("properties") or {}
 
@@ -159,12 +233,19 @@ def synchronize_regions(data):
             source_key = get_source_key(feature)
 
             connection.execute("""
-                INSERT OR IGNORE INTO regions
-                    (source_key, name, country)
+                INSERT OR IGNORE INTO regions (
+                    source_key,
+                    name,
+                    country
+                )
                 VALUES (?, ?, ?)
             """, (source_key, name, country))
 
         connection.commit()
+
+        # Создаём тестовые команды и игроков.
+        # Их данные сохраняются в SQLite.
+        create_test_players(connection)
 
         for feature in data["features"]:
             properties = feature.get("properties") or {}
@@ -194,7 +275,7 @@ def synchronize_regions(data):
                 "SIG-" + str(row["id"]).zfill(4)
             )
 
-            # Владелец — именно игрок, не его команда.
+            # Имя владельца всегда остаётся именем игрока.
             if row["username"]:
                 properties["owner"] = row["username"]
             else:
@@ -202,15 +283,19 @@ def synchronize_regions(data):
                     row["owner"] or NEUTRAL_OWNER
                 )
 
-            properties["owner_player_id"] = row["owner_player_id"]
+            properties["owner_player_id"] = (
+                row["owner_player_id"]
+            )
+
             properties["army"] = row["army"] or 0
             properties["price"] = row["price"] or 0
 
-            # Цвета для карты.
+            # Личный цвет игрока.
             properties["player_color"] = (
                 row["personal_color"] or DEFAULT_PLAYER_COLOR
             ) if row["username"] else None
 
+            # Цвет и название команды.
             properties["team_id"] = row["team_id"]
             properties["team_name"] = row["team_name"]
             properties["team_color"] = row["team_color"]
